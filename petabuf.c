@@ -43,6 +43,8 @@
 #include <limits.h>
 #include <err.h>
 
+#define VERBOSITY	1 /* 0=nothing, 1=counters, 2=debug */
+
 #define PAGESZ		(1 << 24) /* 16 MiB */
 #define TABLESZ		(1 << 26) /* 1 PiB worth of pages */
 #define HEADROOM	(PAGESZ * 4)
@@ -118,7 +120,8 @@ main(int argc, char **argv)
 	if (fcntl(STDOUT_FILENO, F_SETFL, flags | O_NONBLOCK) == -1)
 		err(1, "setting flags for stdout");
 
-	log_counters();
+	if (VERBOSITY >= 1)
+		log_counters();
 
 	if (page_pin(0) == -1)
 		err(1, "pinning page 0");
@@ -127,9 +130,12 @@ main(int argc, char **argv)
 	ntowrite = 0;
 
 	while (ntoread || ntowrite) {
-		fprintf(stderr, "rpos=%u+%u, wpos=%u+%u\n",
-		    (unsigned)rpos.idx, (unsigned)rpos.off,
-		    (unsigned)wpos.idx, (unsigned)wpos.off);
+		if (VERBOSITY >= 2)
+			fprintf(stderr, "rpos=%u+%u, wpos=%u+%u ntoread=%u "
+			    "ntowrite=%u\n",
+			    (unsigned)rpos.idx, (unsigned)rpos.off,
+			    (unsigned)wpos.idx, (unsigned)wpos.off,
+			    (unsigned)ntoread, (unsigned)ntowrite);
 
 		FD_ZERO(&read_fds);
 		FD_ZERO(&write_fds);
@@ -155,7 +161,9 @@ main(int argc, char **argv)
 				fprintf(stderr, "end of input\n");
 				ntoread = 0;
 			} else {
-				fprintf(stderr, "read %zd bytes\n", nread);
+				if (VERBOSITY >= 2)
+					fprintf(stderr, "read %zd bytes\n",
+					    nread);
 
 				if ((rpos.off += (uint32_t)nread) == PAGESZ) {
 					if (rpos.idx != wpos.idx)
@@ -176,7 +184,9 @@ main(int argc, char **argv)
 			if (nwritten == -1)
 				err(1, "write");
 
-			fprintf(stderr, "wrote %zd bytes\n", nwritten);
+			if (VERBOSITY >= 2)
+				fprintf(stderr, "wrote %zd bytes\n",
+				    nwritten);
 
 			if ((wpos.off += (uint32_t)nwritten) == PAGESZ) {
 				page_unpin(wpos.idx);
@@ -270,7 +280,9 @@ page_pin(uint32_t idx)
 		nondisk++;
 	}
 
-	log_counters();
+	if (VERBOSITY >= 1)
+		log_counters();
+
 	return 0;
 }
 
@@ -289,7 +301,8 @@ page_unpin(uint32_t idx)
 		states[idx] &= ~PAGE_MAPPED;
 		nmapped--;
 
-		log_counters();
+		if (VERBOSITY >= 1)
+			log_counters();
 	}
 }
 
@@ -310,7 +323,8 @@ page_free(uint32_t idx)
 		states[idx] &= ~PAGE_ONDISK;
 		nondisk--;
 
-		log_counters();
+		if (VERBOSITY >= 1)
+			log_counters();
 	} else if (states[idx] & PAGE_MAPPED) {
 		if (munmap(pages[idx], PAGESZ) == -1)
 			err(1, "freeing page");
@@ -319,7 +333,8 @@ page_free(uint32_t idx)
 		nmapped--;
 		nfree++;
 
-		log_counters();
+		if (VERBOSITY >= 1)
+			log_counters();
 	}
 }
 
