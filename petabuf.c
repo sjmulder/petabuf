@@ -205,7 +205,7 @@ page_pin(uint32_t idx)
 			err(1, "opening %s", path);
 
 		pages[idx] = mmap(NULL, PAGESZ, PROT_READ | PROT_WRITE,
-		    MAP_PRIVATE, fd, 0);
+		    MAP_SHARED, fd, 0);
 		if (pages[idx] == MAP_FAILED)
 			err(1, "mapping %s", path);
 		if (close(fd) == -1)
@@ -248,7 +248,7 @@ page_pin(uint32_t idx)
 			err(1, "growing %s", path);
 
 		pages[idx] = mmap(NULL, PAGESZ, PROT_READ | PROT_WRITE,
-		    MAP_PRIVATE, fd, 0);
+		    MAP_SHARED, fd, 0);
 		if (pages[idx] == MAP_FAILED)
 			err(1, "mapping %s", path);
 		if (close(fd) == -1)
