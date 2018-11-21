@@ -125,6 +125,10 @@ main(int argc, char **argv)
 	ntowrite = 0;
 
 	while (ntoread || ntowrite) {
+		fprintf(stderr, "rpos=%u+%u, wpos=%u+%u\n",
+		    (unsigned)rpos.idx, (unsigned)rpos.off,
+		    (unsigned)wpos.idx, (unsigned)wpos.off);
+
 		FD_ZERO(&read_fds);
 		FD_ZERO(&write_fds);
 
