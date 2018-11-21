@@ -76,8 +76,8 @@ static size_t nondisk;
 static size_t nfree;	/* in memory */
 
 /* cursors */
-static struct paddr front;
-static struct paddr back;
+static struct paddr rpos;
+static struct paddr wpos;
 
 int
 main(int argc, char **argv)
@@ -137,7 +137,7 @@ main(int argc, char **argv)
 			err(1, "select");
 
 		if (FD_ISSET(STDIN_FILENO, &read_fds)) {
-			nread = read(STDIN_FILENO, page_ptr(back), ntoread);
+			nread = read(STDIN_FILENO, page_ptr(rpos), ntoread);
 			if (nread == -1)
 				err(1, "read");
 			else if (!nread) {
@@ -146,37 +146,37 @@ main(int argc, char **argv)
 			} else {
 				fprintf(stderr, "read %zd bytes\n", nread);
 
-				if ((back.off += (uint32_t)nread) == PAGESZ) {
-					if (front.idx != back.idx)
-						page_unpin(back.idx);
-					if (++back.idx >= TABLESZ)
+				if ((rpos.off += (uint32_t)nread) == PAGESZ) {
+					if (rpos.idx != wpos.idx)
+						page_unpin(rpos.idx);
+					if (++rpos.idx >= TABLESZ)
 						errx(1, "out of pages");
-					page_pin(back.idx);
-					back.off = 0;
+					page_pin(rpos.idx);
+					rpos.off = 0;
 				}
 
-				ntoread = PAGESZ - back.off;
+				ntoread = PAGESZ - rpos.off;
 			}
 		}
 
 		if (FD_ISSET(STDOUT_FILENO, &write_fds)) {
-			nwritten = write(STDOUT_FILENO, page_ptr(front),
+			nwritten = write(STDOUT_FILENO, page_ptr(wpos),
 			    ntowrite);
 			if (nwritten == -1)
 				err(1, "write");
 
 			fprintf(stderr, "wrote %zd bytes\n", nwritten);
 
-			if ((front.off += (uint32_t)nwritten) == PAGESZ) {
-				page_unpin(front.idx);
-				page_free(front.idx);
-				page_pin(++front.idx);
-				front.off = 0;
+			if ((wpos.off += (uint32_t)nwritten) == PAGESZ) {
+				page_unpin(wpos.idx);
+				page_free(wpos.idx);
+				page_pin(++wpos.idx);
+				wpos.off = 0;
 			}
 		}
 
-		ntowrite = (front.idx == back.idx ? back.off : PAGESZ)
-		    - front.off;
+		ntowrite = (wpos.idx == rpos.idx ? rpos.off : PAGESZ)
+		    - wpos.off;
 	}
 
 	return 0;
@@ -314,7 +314,7 @@ page_ptr(struct paddr addr)
 	assert(addr.off < PAGESZ);
 	assert(states[addr.idx] & PAGE_MAPPED);
 
-	return pages[addr.idx] + front.off;
+	return pages[addr.idx] + addr.off;
 }
 
 static char *
