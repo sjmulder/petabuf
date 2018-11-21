@@ -16,7 +16,7 @@
  * along with petabuf. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#if defined(__OpenBSD__)
+#if defined(__OpenBSD__) || defined(__APPLE__)
 # define USE_SYSCTL
 #elif defined(__linux__)
 # define USE_SYSINFO
@@ -337,12 +337,16 @@ static size_t
 get_memsize(void)
 {
 	int names[2];
-	uint64_t memsize;
 	size_t len;
+	uint64_t memsize;
 
-	names[0] = CTL_HW;
-	names[1] = HW_USERMEM64;
 	len = sizeof(memsize);
+	names[0] = CTL_HW;
+#if defined(HW_USERMEM64)
+	names[1] = HW_USERMEM64;
+#else
+	names[1] = HW_MEMSIZE;
+#endif
 
 	if (sysctl(names, 2, &memsize, &len, NULL, 0) == -1)
 		err(1, "sysctl");
