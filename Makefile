@@ -4,6 +4,6 @@ CFLAGS += -g
 all: petabuf
 
 clean:
-	rm -f petabuf
+	rm -rf petabuf petabuf.dSYM/
 
 .PHONY: all clean
