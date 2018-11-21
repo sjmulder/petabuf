@@ -55,7 +55,7 @@ struct paddr {
 	uint32_t off;	/* 0..<PAGESZ */
 };
 
-static void page_pin(uint32_t);
+static int page_pin(uint32_t);
 static void page_unpin(uint32_t);
 static void page_free(uint32_t);
 static char *page_ptr(struct paddr);
@@ -119,7 +119,9 @@ main(int argc, char **argv)
 		err(1, "setting flags for stdout");
 
 	log_counters();
-	page_pin(0);
+
+	if (page_pin(0) == -1)
+		err(1, "pinning page 0");
 
 	ntoread = PAGESZ;
 	ntowrite = 0;
@@ -141,6 +143,11 @@ main(int argc, char **argv)
 			err(1, "select");
 
 		if (FD_ISSET(STDIN_FILENO, &read_fds)) {
+			if (page_pin(rpos.idx) == -1) {
+				warn("pinning page %u", rpos.idx);
+				goto skip_read;
+			}
+
 			nread = read(STDIN_FILENO, page_ptr(rpos), ntoread);
 			if (nread == -1)
 				err(1, "read");
@@ -155,7 +162,6 @@ main(int argc, char **argv)
 						page_unpin(rpos.idx);
 					if (++rpos.idx >= TABLESZ)
 						errx(1, "out of pages");
-					page_pin(rpos.idx);
 					rpos.off = 0;
 				}
 
@@ -163,6 +169,7 @@ main(int argc, char **argv)
 			}
 		}
 
+	skip_read:
 		if (FD_ISSET(STDOUT_FILENO, &write_fds)) {
 			nwritten = write(STDOUT_FILENO, page_ptr(wpos),
 			    ntowrite);
@@ -174,7 +181,8 @@ main(int argc, char **argv)
 			if ((wpos.off += (uint32_t)nwritten) == PAGESZ) {
 				page_unpin(wpos.idx);
 				page_free(wpos.idx);
-				page_pin(++wpos.idx);
+				if (page_pin(++wpos.idx) == -1)
+					err(1, "pinning page %u", wpos.idx);
 				wpos.off = 0;
 			}
 		}
@@ -186,7 +194,7 @@ main(int argc, char **argv)
 	return 0;
 }
 
-static void
+static int
 page_pin(uint32_t idx)
 {
 	char *path;
@@ -195,7 +203,7 @@ page_pin(uint32_t idx)
 	assert(idx < TABLESZ);
 
 	if (states[idx] & PAGE_MAPPED)
-		return;
+		return 0;
 
 	if (states[idx] & PAGE_ONDISK) {
 		/* existing page on disk */
@@ -243,9 +251,12 @@ page_pin(uint32_t idx)
 
 		path = page_filepath(idx);
 		if ((fd = open(path, O_RDWR | O_CREAT | O_TRUNC, 0600)) == -1)
-			err(1, "creating %s", path);
-		if (ftruncate(fd, PAGESZ) == -1)
-			err(1, "growing %s", path);
+			return -1;
+		if (ftruncate(fd, PAGESZ) == -1) {
+			if (close(fd) == -1)
+				err(1, "closing %s", path);
+			return -1;
+		}
 
 		pages[idx] = mmap(NULL, PAGESZ, PROT_READ | PROT_WRITE,
 		    MAP_SHARED, fd, 0);
@@ -260,6 +271,7 @@ page_pin(uint32_t idx)
 	}
 
 	log_counters();
+	return 0;
 }
 
 static void
